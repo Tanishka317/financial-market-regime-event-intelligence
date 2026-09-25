@@ -13,8 +13,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from app.utils.theme import apply_theme
-from app.components.sidebar import render_sidebar
-from app.pages import overview, regimes, events, explainability, model_health
+from app.components.sidebar import get_pages, render_sidebar_header, render_sidebar_footer
 
 # Streamlit Page Configuration
 st.set_page_config(
@@ -29,21 +28,23 @@ apply_theme()
 
 
 def main():
-    """Main application navigation router."""
-    selected_page = render_sidebar()
+    """Main application navigation router using st.navigation."""
+    # 1. Obtain Centralized Page Registry
+    pages_map = get_pages()
 
-    if selected_page == "Overview":
-        overview.render()
-    elif selected_page == "Market Regimes":
-        regimes.render()
-    elif selected_page == "News & Events":
-        events.render()
-    elif selected_page == "Explainability":
-        explainability.render()
-    elif selected_page == "Model & Data Health":
-        model_health.render()
-    else:
-        overview.render()
+    # 2. Render Top Sidebar Brand Header
+    with st.sidebar:
+        render_sidebar_header()
+
+    # 3. Initialize Single Explicit Streamlit Navigation Router
+    pg = st.navigation(list(pages_map.values()), position="sidebar")
+
+    # 4. Render Bottom Sidebar Brand Footer
+    with st.sidebar:
+        render_sidebar_footer()
+
+    # 5. Execute Active Selected Page
+    pg.run()
 
 
 if __name__ == "__main__":

@@ -216,7 +216,6 @@ def create_hmm_regime_timeline_chart(df: pd.DataFrame) -> go.Figure:
     """
     Creates an interactive Plotly visualization showing S&P 500 price history
     color-coded by decoded 4-State Gaussian HMM market regime states.
-    Hover includes: Date, HMM State, S&P 500 Close, Daily Return, Volatility, Momentum, Drawdown.
     """
     fig = go.Figure()
     
@@ -257,7 +256,6 @@ def create_hmm_regime_timeline_chart(df: pd.DataFrame) -> go.Figure:
             )
         )
         
-    # Underlying thin grey line connecting price series
     fig.add_trace(
         go.Scatter(
             x=df.index,
@@ -323,6 +321,194 @@ def create_transition_matrix_heatmap(transmat: np.ndarray) -> go.Figure:
         "xaxis": {**layout["xaxis"], "title": "Next State (t+1)"},
         "yaxis": {**layout["yaxis"], "title": "Current State (t)", "autorange": "reversed"},
         "height": 340
+    })
+    
+    fig.update_layout(layout)
+    return fig
+
+
+def create_global_shap_chart(global_shap_df: pd.DataFrame) -> go.Figure:
+    """
+    Creates a horizontal Plotly bar chart showing Global Mean Absolute SHAP Feature Importance.
+    """
+    df_sorted = global_shap_df.sort_values(by="Mean_Absolute_SHAP", ascending=True)
+    
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            y=df_sorted["Feature"],
+            x=df_sorted["Mean_Absolute_SHAP"],
+            orientation="h",
+            marker=dict(
+                color=df_sorted["Mean_Absolute_SHAP"],
+                colorscale=[[0.0, "#1F6FEB"], [1.0, "#58A6FF"]],
+            ),
+            hovertemplate="<b>%{y}</b><br>Mean |SHAP| Value: %{x:.6f}<extra></extra>"
+        )
+    )
+    
+    layout = get_plotly_dark_layout()
+    layout.update({
+        "title": {"text": "Global Mean Absolute SHAP Feature Importance", "x": 0.0},
+        "xaxis": {**layout["xaxis"], "title": "Mean |SHAP Value| (Impact on Model Output)"},
+        "yaxis": {**layout["yaxis"], "title": "Feature"},
+        "height": 320,
+        "showlegend": False
+    })
+    
+    fig.update_layout(layout)
+    return fig
+
+
+def create_local_shap_chart(local_shap_df: pd.DataFrame, latest_date: str, pred_state: int) -> go.Figure:
+    """
+    Creates a horizontal Plotly bar chart showing local SHAP contributions for the latest observation.
+    """
+    df_sorted = local_shap_df.sort_values(by="SHAP_Value", ascending=True)
+    colors = [COLOR_ACCENT_GREEN if val >= 0 else COLOR_ACCENT_RED for val in df_sorted["SHAP_Value"]]
+    
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            y=df_sorted["Feature"],
+            x=df_sorted["SHAP_Value"],
+            orientation="h",
+            marker_color=colors,
+            customdata=df_sorted["Feature_Value"],
+            hovertemplate="<b>%{y}</b><br>Feature Value: %{customdata:.6f}<br>SHAP Contribution: %{x:+.6f}<extra></extra>"
+        )
+    )
+    
+    fig.add_shape(
+        type="line",
+        x0=0,
+        x1=0,
+        y0=-0.5,
+        y1=len(df_sorted) - 0.5,
+        line=dict(color=COLOR_BORDER_LIGHT, width=1.5, dash="dash")
+    )
+    
+    layout = get_plotly_dark_layout()
+    layout.update({
+        "title": {"text": f"Local SHAP Feature Contributions ({latest_date} — State {pred_state})", "x": 0.0},
+        "xaxis": {**layout["xaxis"], "title": "SHAP Contribution Value (Push toward State)"},
+        "yaxis": {**layout["yaxis"], "title": "Feature"},
+        "height": 320,
+        "showlegend": False
+    })
+    
+    fig.update_layout(layout)
+    return fig
+
+
+def create_sentiment_distribution_chart(sentiment_counts: pd.Series) -> go.Figure:
+    """
+    Creates a Plotly Donut chart displaying FinBERT sentiment breakdown (Positive, Neutral, Negative).
+    """
+    labels = ["positive", "neutral", "negative"]
+    counts = [sentiment_counts.get(l, 0) for l in labels]
+    
+    color_map = {
+        "positive": COLOR_ACCENT_GREEN,
+        "neutral": COLOR_TEXT_SECONDARY,
+        "negative": COLOR_ACCENT_RED
+    }
+    colors = [color_map[l] for l in labels]
+    
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=[l.capitalize() for l in labels],
+                values=counts,
+                hole=0.55,
+                marker=dict(colors=colors),
+                textinfo="label+percent",
+                hovertemplate="<b>%{label}</b><br>Count: %{value}<br>Share: %{percent}<extra></extra>"
+            )
+        ]
+    )
+    
+    layout = get_plotly_dark_layout()
+    layout.update({
+        "title": {"text": "FinBERT Sentiment Distribution", "x": 0.0},
+        "height": 300,
+        "showlegend": True,
+        "legend": {"orientation": "h", "y": -0.1, "x": 0.2, "font": {"color": COLOR_TEXT_SECONDARY}}
+    })
+    
+    fig.update_layout(layout)
+    return fig
+
+
+def create_event_type_distribution_chart(event_stats_df: pd.DataFrame) -> go.Figure:
+    """
+    Creates a horizontal Plotly bar chart displaying article volume by event category.
+    """
+    df_sorted = event_stats_df.sort_values(by="Event_Count", ascending=True)
+    
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            y=df_sorted["event_type"],
+            x=df_sorted["Event_Count"],
+            orientation="h",
+            marker=dict(
+                color=df_sorted["Event_Count"],
+                colorscale=[[0.0, "#1F6FEB"], [1.0, "#58A6FF"]]
+            ),
+            hovertemplate="<b>%{y}</b><br>Article Count: %{x}<extra></extra>"
+        )
+    )
+    
+    layout = get_plotly_dark_layout()
+    layout.update({
+        "title": {"text": "News Volume by Event Category", "x": 0.0},
+        "xaxis": {**layout["xaxis"], "title": "Article Count"},
+        "yaxis": {**layout["yaxis"], "title": "Event Category"},
+        "height": 340,
+        "showlegend": False
+    })
+    
+    fig.update_layout(layout)
+    return fig
+
+
+def create_event_hmm_crosstab_heatmap(crosstab_df: pd.DataFrame) -> go.Figure:
+    """
+    Creates a Plotly Heatmap showing event frequency distribution across HMM states.
+    """
+    # Remove 'All' margin row/col for heatmap visualization
+    clean_ct = crosstab_df[crosstab_df["event_type"] != "All"].copy()
+    event_types = clean_ct["event_type"].tolist()
+    
+    state_cols = [c for c in clean_ct.columns if c not in ["event_type", "All"]]
+    z_matrix = clean_ct[state_cols].values
+    
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=z_matrix,
+            x=[f"HMM State {c}" for c in state_cols],
+            y=event_types,
+            text=[[str(val) for val in row] for row in z_matrix],
+            texttemplate="%{text}",
+            textfont={"size": 12, "color": COLOR_TEXT_PRIMARY},
+            colorscale=[
+                [0.0, "#0D1117"],
+                [0.2, "#161B22"],
+                [0.6, "#1F6FEB"],
+                [1.0, "#58A6FF"]
+            ],
+            showscale=False,
+            hovertemplate="<b>%{y}</b> @ <b>%{x}</b><br>Frequency: %{z} events<extra></extra>"
+        )
+    )
+    
+    layout = get_plotly_dark_layout()
+    layout.update({
+        "title": {"text": "Event Category × HMM Market State Crosstab", "x": 0.0},
+        "xaxis": {**layout["xaxis"], "title": "Decoded HMM Market State"},
+        "yaxis": {**layout["yaxis"], "title": "Event Category", "autorange": "reversed"},
+        "height": 360
     })
     
     fig.update_layout(layout)

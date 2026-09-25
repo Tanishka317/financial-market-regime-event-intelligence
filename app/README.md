@@ -12,7 +12,7 @@ The frontend is built using **Streamlit** and follow a modular component-driven 
 
 ```text
 app/
-├── app.py                     # Main application entry point & router
+├── main.py                    # Main application entry point & router
 ├── components/                # Reusable UI component modules
 │   ├── __init__.py
 │   ├── sidebar.py            # Compact sidebar navigation
@@ -78,5 +78,5 @@ The UI components are decoupled from data ingestion and ML model execution. To c
 To launch the Streamlit frontend locally using the project's virtual environment:
 
 ```bash
-.\.venv\Scripts\streamlit.exe run app/app.py
+.\.venv\Scripts\streamlit.exe run app/main.py
 ```

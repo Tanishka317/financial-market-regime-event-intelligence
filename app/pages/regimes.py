@@ -1,5 +1,6 @@
 """
 Market Regimes Dashboard Page — Connected to Gaussian HMM Pipeline
+Financial Market Regime & Event Intelligence Engine
 """
 
 import streamlit as st
@@ -7,7 +8,9 @@ import pandas as pd
 import numpy as np
 from app.components.layout import render_page_header, render_section_header
 from app.components.cards import render_kpi_card, render_empty_state
+from app.components.sidebar import navigate_to
 from app.utils.regime_model import fit_and_decode_hmm
+from app.utils.shared_context import get_shared_dashboard_context
 from app.utils.charts import (
     create_hmm_regime_timeline_chart,
     create_transition_matrix_heatmap
@@ -17,20 +20,28 @@ from app.utils.charts import (
 def render():
     """Renders the Market Regimes Page connected to real Gaussian HMM decodes."""
     
-    # 1. Fetch & decode HMM model results with Streamlit caching & error handling
+    # 1. Fetch & decode HMM model results via shared context & regime_model
     try:
         with st.spinner("Decoding HMM market regimes..."):
+            ctx = get_shared_dashboard_context(period="5y")
             res = fit_and_decode_hmm(period="5y")
             market_df = res["market_df"]
             transmat = res["transmat"]
             stats_df = res["state_stats_df"]
             duration_df = res["duration_df"]
-            latest_state = res["latest_state"]
-            latest_date = res["latest_date"]
-            latest_label = res["latest_label"]
-            latest_desc = res["latest_desc"]
-            consec_days = res["consecutive_days"]
+            
+            latest_state = ctx["current_state"]
+            latest_date = ctx["latest_date"]
+            latest_label = ctx["current_regime_label"]
+            latest_desc = ctx["current_regime_desc"]
+            consec_days = ctx["consecutive_sessions"]
+            expected_dur = ctx["expected_duration"]
+            empirical_dur = ctx["empirical_duration"]
+            p_ii = ctx["p_ii"]
+            next_state = ctx["next_likely_state"]
+            next_prob = ctx["next_likely_prob"]
             log_lik = res["log_likelihood"]
+            
             status_text = f"Active: State {latest_state} ({latest_label})"
             status_type = "success"
             data_error = None
@@ -57,50 +68,109 @@ def render():
         )
         return
 
-    # 3. CURRENT REGIME: Top KPI Cards Row & Narrative Description
-    col1, col2, col3 = st.columns(3)
+    # 3. CURRENT REGIME SNAPSHOT: Top KPI Cards Row & Narrative Context
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         render_kpi_card(
-            title="Active Decoded State",
-            value=f"State {latest_state} — {latest_label}",
-            subtitle=f"Session date: {latest_date}",
+            title="Current Regime",
+            value=f"State {latest_state}",
+            subtitle=latest_label,
             badge_text="Active State",
             badge_type="success"
         )
     with col2:
         render_kpi_card(
-            title="State Persistence",
+            title="Current Streak",
             value=f"{consec_days} Sessions",
-            subtitle=f"Consecutive trading sessions in State {latest_state}",
+            subtitle=f"Since {latest_date}",
             badge_text="Persistence",
             badge_type="research"
         )
     with col3:
         render_kpi_card(
-            title="Model Log-Likelihood",
-            value=f"{log_lik:,.2f}",
-            subtitle="4-State Gaussian HMM goodness-of-fit score",
-            badge_text="Goodness-of-Fit",
+            title="Expected Duration",
+            value=f"{expected_dur:.1f} Days",
+            subtitle=f"Theoretical E[D] = 1/(1-P_ii)",
+            badge_text="Model Duration",
+            badge_type="research"
+        )
+    with col4:
+        render_kpi_card(
+            title="Empirical Duration",
+            value=f"{empirical_dur:.1f} Days",
+            subtitle="Observed block length",
+            badge_text="Observed Avg",
+            badge_type="research"
+        )
+    with col5:
+        render_kpi_card(
+            title="Transition Probabilities",
+            value=f"P_{latest_state}{latest_state}: {p_ii*100:.1f}%",
+            subtitle=f"Next likely: State {next_state} ({next_prob*100:.1f}%)",
+            badge_text="Transmat",
             badge_type="research"
         )
 
     st.markdown(
         f"""
-        <div class="fmie-card" style="border-left: 4px solid #58A6FF; margin-top: 0.5rem;">
+        <div class="fmie-card" style="border-left: 4px solid #58A6FF; margin-top: 0.5rem; margin-bottom: 1.2rem;">
             <div style="font-weight: 600; color: #E6EDF3; font-size: 0.95rem; margin-bottom: 0.3rem;">
-                Current Regime Context (As of {latest_date}):
+                Current Regime Intelligence (As of {latest_date}):
             </div>
-            <div style="font-size: 0.85rem; color: #8B949E;">
+            <div style="font-size: 0.85rem; color: #8B949E; line-height: 1.5;">
                 The market is currently in <strong>State {latest_state} ({latest_label})</strong>. {latest_desc}
+                This regime exhibits a high self-persistence probability of <strong>{p_ii*100:.1f}%</strong> per trading session, 
+                with a theoretical expected duration of <strong>{expected_dur:.1f} sessions</strong> and an empirical average duration of <strong>{empirical_dur:.1f} sessions</strong>.
             </div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
+    # 4. REGIME INTELLIGENCE SECTION: Cross-Module Links
+    render_section_header(
+        title="REGIME INTELLIGENCE & CROSS-MODULE NAVIGATION",
+        subtitle="Connect latent HMM market regimes to financial news streams and feature attribution explainability."
+    )
+
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        st.markdown(
+            f"""
+            <div class="fmie-card" style="margin-bottom: 0.5rem;">
+                <div style="font-weight: 600; color: #E6EDF3; font-size: 0.9rem; margin-bottom: 0.3rem;">
+                    📰 News & Event Associations
+                </div>
+                <div style="font-size: 0.8rem; color: #8B949E; margin-bottom: 0.75rem;">
+                    Inspect financial news headlines, FinBERT sentiment distributions, and event categories associated with State {latest_state} ({latest_label}).
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        if st.button(f"Inspect Historical Events in State {latest_state} →", use_container_width=True, key="btn_regime_to_events"):
+            navigate_to("News & Events")
+
+    with r_col2:
+        st.markdown(
+            f"""
+            <div class="fmie-card" style="margin-bottom: 0.5rem;">
+                <div style="font-weight: 600; color: #E6EDF3; font-size: 0.9rem; margin-bottom: 0.3rem;">
+                    🔍 Feature Drivers & SHAP Attributions
+                </div>
+                <div style="font-size: 0.8rem; color: #8B949E; margin-bottom: 0.75rem;">
+                    Analyze game-theoretic SHAP feature attributions explaining why the surrogate model assigned the market to State {latest_state}.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        if st.button(f"Analyze Feature Drivers for State {latest_state} →", use_container_width=True, key="btn_regime_to_shap"):
+            navigate_to("Explainability")
+
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 4. REGIME TIMELINE: Interactive Plotly Timeline Chart
+    # 5. REGIME TIMELINE: Interactive Plotly Timeline Chart
     render_section_header(
         title="1. Historical Regime Trajectory Timeline",
         subtitle=f"Decoded Gaussian HMM market regimes overlaid on S&P 500 daily price trajectory ({len(market_df):,} sessions)"
@@ -110,7 +180,7 @@ def render():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 5. REGIME CHARACTERISTICS: Qualitative Cards Derived from Actual Statistics
+    # 6. REGIME CHARACTERISTICS: Qualitative Cards Derived from Actual Statistics
     render_section_header(
         title="2. Regime Characteristics & Empirical Taxonomy",
         subtitle="Feature profiles derived directly from fitted model emissions (Daily Return, Volatility, Momentum, Drawdown)"
@@ -156,7 +226,7 @@ def render():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 6. TRANSITION MATRIX + DURATION: Heatmap & State Persistence Table
+    # 7. TRANSITION MATRIX + DURATION: Heatmap & State Persistence Table
     render_section_header(
         title="3. Transition Matrix & State Persistence",
         subtitle="Inter-regime transition probability matrix and expected vs. empirical state duration"
@@ -198,7 +268,7 @@ def render():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 7. REGIME STATISTICS: Full Empirical Table
+    # 8. REGIME STATISTICS: Full Empirical Table
     render_section_header(
         title="4. Full Empirical Regime Statistics",
         subtitle="Comprehensive numerical summary of feature means across all 4 Gaussian HMM market states"
@@ -218,3 +288,8 @@ def render():
     })
 
     st.dataframe(formatted_stats_df, use_container_width=True, hide_index=True)
+
+
+if __name__ == "__main__":
+    render()
+
