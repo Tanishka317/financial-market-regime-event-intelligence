@@ -89,10 +89,13 @@ def calculate_market_features(raw_df: pd.DataFrame) -> pd.DataFrame:
 def get_market_dataset(period: str = "5y") -> pd.DataFrame:
     """
     Convenience function that fetches and processes the cleaned market dataset.
+    Returns the cleaned DataFrame without database side effects.
     """
     raw_df = fetch_raw_market_data(period=period)
     clean_df = calculate_market_features(raw_df)
     return clean_df
+
+
 
 
 def get_latest_market_snapshot(market_df: pd.DataFrame) -> dict:
