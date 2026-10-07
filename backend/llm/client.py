@@ -9,7 +9,11 @@ enforces API key safety, model configuration, timeouts, and error handling.
 import os
 import logging
 from typing import Optional, Dict, Any
+from dotenv import load_dotenv
 from backend.llm.prompts import SYSTEM_PROMPT
+
+# Ensure environment variables are loaded from .env
+load_dotenv()
 
 logger = logging.getLogger("llm.client")
 
@@ -26,7 +30,7 @@ class OpenAILLMClient:
         timeout: float = 30.0
     ):
         self.model = model or os.getenv("OPENAI_LLM_MODEL", "gpt-4o-mini")
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
         self.timeout = timeout
 
     def is_available(self) -> bool:

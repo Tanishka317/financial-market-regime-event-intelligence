@@ -9,6 +9,7 @@ Verifies:
 4. FAISS index creation, local disk persistence, and loading.
 5. Semantic vector retrieval & scoring.
 6. Database row count immutability across all 5 tables.
+7. Local SentenceTransformers (all-MiniLM-L6-v2) offline index building & semantic retrieval.
 """
 
 import os
@@ -19,7 +20,7 @@ from sqlalchemy import select, func
 from backend.database.connection import get_session
 from backend.database.models import MarketData, RegimePrediction, News, NewsAnalysis, EventMarketAnalysis
 from backend.rag.document_builder import build_rag_documents
-from backend.rag.embedder import OpenAIEmbedder, MockEmbedder
+from backend.rag.embedder import LocalEmbedder, OpenAIEmbedder, MockEmbedder
 from backend.rag.vector_store import FAISSVectorStore
 from backend.rag.retriever import RAGRetriever, build_and_save_rag_index, retrieve_rag_context
 
@@ -79,22 +80,22 @@ class TestRAGFoundation(unittest.TestCase):
 
     def test_03_mock_embedder(self):
         """Test mock embedder generates valid 1D and 2D normalized vector arrays."""
-        mock = MockEmbedder(dim=1536)
+        mock = MockEmbedder(dim=384)
         vec = mock.embed_text("Inflation report update")
-        self.assertEqual(vec.shape, (1536,))
+        self.assertEqual(vec.shape, (384,))
         self.assertAlmostEqual(float(np.linalg.norm(vec)), 1.0, places=4)
 
         batch = mock.embed_batch(["Headline 1", "Headline 2"])
-        self.assertEqual(batch.shape, (2, 1536))
+        self.assertEqual(batch.shape, (2, 384))
 
     def test_04_faiss_vector_store_index_persistence_and_loading(self):
         """Test FAISS index creation, disk persistence, and loading."""
         documents = build_rag_documents()
-        mock = MockEmbedder(dim=1536)
+        mock = MockEmbedder(dim=384)
         texts = [doc["text"] for doc in documents]
         embeddings = mock.embed_batch(texts)
 
-        store = FAISSVectorStore(embedding_dim=1536)
+        store = FAISSVectorStore(embedding_dim=384)
         store.add_documents(embeddings, documents)
         self.assertEqual(store.total_documents, len(documents))
 
@@ -125,7 +126,22 @@ class TestRAGFoundation(unittest.TestCase):
             self.assertIn("score", res)
             self.assertIsInstance(res["score"], float)
 
-    def test_06_database_immutability(self):
+    def test_06_local_sentence_transformer_embedding_and_retrieval(self):
+        """Test local sentence-transformer (all-MiniLM-L6-v2) index building and semantic retrieval offline."""
+        local_embedder = LocalEmbedder()
+        retriever = RAGRetriever(storage_dir=self.test_storage_dir, embedder=local_embedder)
+        build_res = retriever.build_and_save_index()
+
+        self.assertEqual(build_res["status"], "success")
+        self.assertEqual(build_res["embedding_dim"], 384)
+        self.assertEqual(build_res["provider"], "LocalEmbedder")
+
+        results = retriever.retrieve(query="What news articles discuss inflation risks?", top_k=3)
+        self.assertGreater(len(results), 0)
+        self.assertIn("headline", results[0]["metadata"])
+        self.assertIn("score", results[0])
+
+    def test_07_database_immutability(self):
         """Verify PostgreSQL row counts remained 100% unchanged."""
         with get_session() as session:
             final_counts = {

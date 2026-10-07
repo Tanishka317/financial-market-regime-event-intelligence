@@ -2,8 +2,8 @@
 RAG Semantic Retriever & Index Management Module
 Financial Market Regime & Event Intelligence Engine
 
-Orchestrates document construction, vector embedding, FAISS indexing, persistence,
-and semantic context retrieval over local financial news & event records.
+Orchestrates document construction, vector embedding (Local SentenceTransformers by default,
+or optional OpenAI / Mock providers), FAISS indexing, persistence, and semantic context retrieval.
 """
 
 import os
@@ -11,7 +11,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from backend.rag.document_builder import build_rag_documents
-from backend.rag.embedder import OpenAIEmbedder, MockEmbedder
+from backend.rag.embedder import get_embedder, MockEmbedder, LocalEmbedder
 from backend.rag.vector_store import FAISSVectorStore
 
 logger = logging.getLogger("rag.retriever")
@@ -27,6 +27,7 @@ class RAGRetriever:
         self,
         storage_dir: str = "backend/rag/storage",
         embedder: Optional[Any] = None,
+        provider: Optional[str] = None,
         use_mock: bool = False
     ):
         self.storage_dir = storage_dir
@@ -35,7 +36,7 @@ class RAGRetriever:
         elif use_mock:
             self.embedder = MockEmbedder()
         else:
-            self.embedder = OpenAIEmbedder()
+            self.embedder = get_embedder(provider)
 
         self.vector_store = FAISSVectorStore()
         self._is_loaded = False
@@ -54,10 +55,10 @@ class RAGRetriever:
             return {"document_count": 0, "status": "empty", "storage_dir": self.storage_dir}
 
         texts = [doc["text"] for doc in documents]
-        logger.info(f"Generating embeddings for {len(texts)} RAG documents...")
+        logger.info(f"Generating embeddings for {len(texts)} RAG documents using {self.embedder.__class__.__name__}...")
         embeddings = self.embedder.embed_batch(texts)
 
-        dim = embeddings.shape[1] if len(embeddings) > 0 else 1536
+        dim = embeddings.shape[1] if len(embeddings) > 0 else 384
         self.vector_store = FAISSVectorStore(embedding_dim=dim)
         self.vector_store.add_documents(embeddings, documents)
         self.vector_store.save(self.storage_dir)
@@ -67,6 +68,7 @@ class RAGRetriever:
             "document_count": len(documents),
             "embedding_dim": dim,
             "storage_dir": self.storage_dir,
+            "provider": self.embedder.__class__.__name__,
             "status": "success",
         }
 
@@ -109,12 +111,14 @@ class RAGRetriever:
 def build_and_save_rag_index(
     storage_dir: str = "backend/rag/storage",
     db: Optional[Session] = None,
+    provider: Optional[str] = None,
     use_mock: bool = False
 ) -> Dict[str, Any]:
     """
     Standalone function to explicitly trigger RAG index build and local persistence.
+    Defaults to local sentence-transformer provider.
     """
-    retriever = RAGRetriever(storage_dir=storage_dir, use_mock=use_mock)
+    retriever = RAGRetriever(storage_dir=storage_dir, provider=provider, use_mock=use_mock)
     return retriever.build_and_save_index(db=db)
 
 
@@ -122,10 +126,12 @@ def retrieve_rag_context(
     query: str,
     top_k: int = 5,
     storage_dir: str = "backend/rag/storage",
+    provider: Optional[str] = None,
     use_mock: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Standalone function to retrieve semantic RAG context for a query prompt.
+    Defaults to local sentence-transformer provider.
     """
-    retriever = RAGRetriever(storage_dir=storage_dir, use_mock=use_mock)
+    retriever = RAGRetriever(storage_dir=storage_dir, provider=provider, use_mock=use_mock)
     return retriever.retrieve(query=query, top_k=top_k)
