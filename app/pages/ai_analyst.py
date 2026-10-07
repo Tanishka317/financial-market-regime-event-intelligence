@@ -13,15 +13,20 @@ from app.components.cards import render_status_badge
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
-def query_analyst_api(question: str, ticker: str = "^GSPC") -> dict:
+def query_analyst_api(question: str, ticker: str = "^GSPC", use_llm: bool = False, use_rag: bool = True) -> dict:
     """
     Calls the FastAPI /api/analyst/query endpoint.
     Returns the JSON response dict or raises an Exception.
     """
     url = f"{API_BASE_URL.rstrip('/')}/api/analyst/query"
-    payload = {"question": question, "ticker": ticker}
+    payload = {
+        "question": question,
+        "ticker": ticker,
+        "use_llm": use_llm,
+        "use_rag": use_rag
+    }
     
-    response = requests.post(url, json=payload, timeout=10)
+    response = requests.post(url, json=payload, timeout=15)
     response.raise_for_status()
     return response.json()
 
@@ -40,7 +45,7 @@ def render():
     # 2. Section Header
     render_section_header(
         title="Ask the Financial Analyst",
-        subtitle="Submit natural language questions to query live PostgreSQL market data, HMM regime predictions, and event analytics."
+        subtitle="Submit natural language questions to query live PostgreSQL market data, HMM regime predictions, and local FAISS event analytics."
     )
 
     # 3. Example Questions & Input Form
@@ -91,51 +96,82 @@ def render():
             st.warning("Please enter a question to query the analyst.")
             return
 
-        with st.spinner("Analyzing question & querying PostgreSQL backend..."):
+        with st.spinner("Analyzing question & querying local hybrid engine..."):
             try:
-                result = query_analyst_api(user_question.strip(), ticker_input.strip() or "^GSPC")
+                result = query_analyst_api(
+                    question=user_question.strip(),
+                    ticker=ticker_input.strip() or "^GSPC",
+                    use_llm=False,
+                    use_rag=True
+                )
                 
                 intent = result.get("intent", "unsupported")
                 answer = result.get("answer", "")
+                mode = result.get("mode", "local_hybrid")
+                sources = result.get("sources", [])
                 supporting_data = result.get("supporting_data", {})
                 
-                # Render Results
+                # Render Results Header
                 render_section_header(
                     title="Analyst Response",
                     subtitle=f"Query: '{user_question}'"
                 )
 
-                # Intent Badge & Status
+                # Mode & Intent Status Badges
                 badge_type = "warning" if intent == "unsupported" else "success"
-                badge_html = render_status_badge(f"Intent: {intent}", badge_type=badge_type)
+                intent_badge = render_status_badge(f"Intent: {intent}", badge_type=badge_type)
+                mode_badge = render_status_badge(f"Provider: {mode}", badge_type="info")
                 
                 st.markdown(
                     f"""
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                        <h4 style="margin: 0; color: #E6EDF3;">Analyst Answer</h4>
-                        {badge_html}
+                        <h4 style="margin: 0; color: #E6EDF3;">Grounded Answer</h4>
+                        <div>
+                            {mode_badge}
+                            <span style="margin-left: 8px;">{intent_badge}</span>
+                        </div>
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
 
                 # Answer Box
-                if intent == "unsupported":
+                if mode == "insufficient_context":
                     st.info(f"ℹ️ {answer}")
                 else:
                     st.markdown(
                         f"""
                         <div style="background-color: #161B22; border: 1px solid #30363D; border-left: 4px solid #238636; border-radius: 6px; padding: 1.25rem; margin-bottom: 1.5rem;">
-                            <div style="font-size: 1.05rem; color: #E6EDF3; line-height: 1.6;">
-                                {answer}
+                            <div style="font-size: 1.05rem; color: #E6EDF3; line-height: 1.6; white-space: pre-wrap;">
+{answer}
                             </div>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
 
-                # Supporting Context & Data Expander
-                with st.expander("🔍 View Supporting Data & Database Context", expanded=(intent != "unsupported")):
+                # Display Retrieved RAG Sources
+                if sources:
+                    with st.expander("📚 View Retrieved Local News Context (FAISS RAG)", expanded=True):
+                        for idx, src in enumerate(sources, 1):
+                            headline = src.get("headline", "N/A")
+                            publisher = src.get("publisher", "N/A")
+                            event_type = src.get("event_type", "Other")
+                            sentiment = src.get("sentiment_label", "neutral")
+                            score = src.get("score")
+                            score_str = f"Relevance: {score:.4f}" if score is not None else ""
+                            url = src.get("url")
+
+                            st.markdown(
+                                f"**Source [{idx}]**: [{headline}]({url})" if url else f"**Source [{idx}]**: {headline}"
+                            )
+                            st.caption(
+                                f"Publisher: {publisher} | Event: {event_type} | Sentiment: {sentiment} | {score_str}"
+                            )
+                            st.markdown("---")
+
+                # Supporting SQL Data Expander
+                with st.expander("🔍 View Supporting Database Analytics (SQL)", expanded=(intent != "unsupported")):
                     st.json(supporting_data)
 
             except requests.exceptions.ConnectionError:

@@ -248,7 +248,7 @@ def get_event_market_analysis(
 class AnalystQueryRequest(BaseModel):
     question: str
     ticker: Optional[str] = "^GSPC"
-    use_llm: Optional[bool] = True
+    use_llm: Optional[bool] = False
     use_rag: Optional[bool] = True
 
 
@@ -256,7 +256,7 @@ class AnalystQueryResponse(BaseModel):
     question: str
     intent: str
     answer: str
-    mode: Optional[str] = "deterministic"
+    mode: Optional[str] = "local_hybrid"
     sources: Optional[List[Dict[str, Any]]] = []
     supporting_data: Dict[str, Any]
 
@@ -268,10 +268,10 @@ def query_financial_analyst(
 ):
     """
     Data-grounded Financial Intelligence Analyst endpoint.
-    Orchestrates deterministic SQL analytical query, optional FAISS RAG context retrieval,
+    Orchestrates deterministic SQL analytical query, local FAISS RAG context retrieval,
     and optional OpenAI LLM synthesis.
     """
-    use_llm = request.use_llm if request.use_llm is not None else True
+    use_llm = request.use_llm if request.use_llm is not None else False
     use_rag = request.use_rag if request.use_rag is not None else True
     return execute_hybrid_analyst_query(
         db=db,
