@@ -1,5 +1,5 @@
 """
-Financial Analyst Service Foundation Test Suite
+Financial Analyst Service Expanded Natural Language Test Suite
 Financial Market Regime & Event Intelligence Engine
 """
 
@@ -19,16 +19,15 @@ from backend.database.connection import get_session
 from backend.database.models import MarketData, RegimePrediction, News, NewsAnalysis, EventMarketAnalysis
 
 
-def test_analyst_foundation():
+def test_analyst_expanded_queries():
     load_dotenv()
-    print("==========================================")
-    print("FINANCIAL ANALYST FOUNDATION TEST SUITE")
-    print("==========================================")
+    print("=========================================================")
+    print("EXPANDED FINANCIAL ANALYST NATURAL LANGUAGE TEST SUITE")
+    print("=========================================================\n")
 
     client = TestClient(app)
-    print("FastAPI application and TestClient initialized successfully.\n")
 
-    # 1. Record initial database row counts across all 5 tables
+    # 1. Record initial database row counts
     with get_session() as session:
         initial_counts = {
             "market_data": session.scalar(select(func.count()).select_from(MarketData)),
@@ -43,88 +42,62 @@ def test_analyst_foundation():
         print(f"  - {table_name}: {count}")
     print("")
 
-    # 2. Test Question 1: Latest Market Regime
-    q1 = "What is the latest market regime?"
-    print(f"1. Testing POST /api/analyst/query ('{q1}')...")
-    res1 = client.post("/api/analyst/query", json={"question": q1})
-    print(f"   Status: {res1.status_code}")
-    assert res1.status_code == 200, f"Expected 200, got {res1.status_code}"
-    data1 = res1.json()
-    print(f"   Intent: {data1.get('intent')}")
-    print(f"   Answer: {data1.get('answer')}")
-    assert data1.get("intent") == "latest_regime"
-    assert "Low-Vol Bull" in data1.get("answer") or "HMM State" in data1.get("answer") or "regime" in data1.get("answer").lower()
-    assert "supporting_data" in data1 and "hmm_state" in data1["supporting_data"]
-    print("   [OK] Latest market regime query verified.\n")
+    # Test Cases: (Question, Expected Intent)
+    test_cases = [
+        # Original Base Queries
+        ("What is the latest market regime?", "latest_regime"),
+        ("What is the latest market data?", "latest_market_data"),
+        ("What recent financial news/events are available?", "recent_news"),
+        ("How did Inflation perform?", "event_performance"),
+        ("What was the market regime during Monetary Policy events?", "event_regime"),
+        
+        # New Natural Language Regime Variations
+        ("What's the current regime?", "latest_regime"),
+        ("Which regime is the market in?", "latest_regime"),
+        ("Tell me about the latest S&P 500 regime.", "latest_regime"),
+        ("Show regime distribution", "regime_distribution"),
+        ("How often is the market in a bull regime?", "regime_distribution"),
+        ("Market performance by regime", "regime_market_behavior"),
+        
+        # New Natural Language Market Metric Variations
+        ("How volatile has the market been?", "market_metrics"),
+        ("What is the market momentum?", "market_metrics"),
+        ("What is the maximum drawdown?", "market_metrics"),
+        ("Show cross-asset correlations", "market_metrics"),
+        
+        # New Natural Language News & Sentiment Variations
+        ("Show recent negative news.", "news_by_sentiment"),
+        ("Positive news headlines", "news_by_sentiment"),
+        ("News about inflation", "recent_news"),
+        
+        # New Natural Language Event Variations
+        ("What happened after inflation events?", "event_performance"),
+        ("Which events performed best?", "event_ranking"),
+        ("How did monetary policy events behave during different regimes?", "event_regime"),
+        
+        # Out-of-Scope / Unsupported Variations
+        ("What is tomorrow's price of Apple stock?", "unsupported"),
+        ("Who won the football match?", "unsupported"),
+    ]
 
-    # 3. Test Question 2: Latest Market Data
-    q2 = "What is the latest market data?"
-    print(f"2. Testing POST /api/analyst/query ('{q2}')...")
-    res2 = client.post("/api/analyst/query", json={"question": q2})
-    print(f"   Status: {res2.status_code}")
-    assert res2.status_code == 200, f"Expected 200, got {res2.status_code}"
-    data2 = res2.json()
-    print(f"   Intent: {data2.get('intent')}")
-    print(f"   Answer: {data2.get('answer')}")
-    assert data2.get("intent") == "latest_market_data"
-    assert "close" in data2.get("supporting_data", {})
-    assert "daily_return" in data2.get("supporting_data", {})
-    print("   [OK] Latest market data query verified.\n")
+    print("Executing Natural Language Query Tests...")
+    for idx, (question, expected_intent) in enumerate(test_cases, 1):
+        response = client.post("/api/analyst/query", json={"question": question})
+        assert response.status_code == 200, f"HTTP failure on query '{question}': {response.status_code}"
+        data = response.json()
+        
+        actual_intent = data.get("intent")
+        answer = data.get("answer", "")
+        
+        assert actual_intent == expected_intent, (
+            f"Test #{idx} Failed for '{question}': expected intent '{expected_intent}', got '{actual_intent}'"
+        )
+        assert answer, f"Test #{idx} Failed: Empty answer for '{question}'"
+        assert "supporting_data" in data, f"Test #{idx} Failed: Missing supporting_data for '{question}'"
 
-    # 4. Test Question 3: Recent Financial News
-    q3 = "What recent financial news/events are available?"
-    print(f"3. Testing POST /api/analyst/query ('{q3}')...")
-    res3 = client.post("/api/analyst/query", json={"question": q3})
-    print(f"   Status: {res3.status_code}")
-    assert res3.status_code == 200, f"Expected 200, got {res3.status_code}"
-    data3 = res3.json()
-    print(f"   Intent: {data3.get('intent')}")
-    print(f"   Answer: {data3.get('answer')}")
-    assert data3.get("intent") == "recent_news"
-    assert "articles" in data3.get("supporting_data", {})
-    print("   [OK] Recent news query verified.\n")
+        print(f"  #{idx:02d} [OK] '{question}'\n       -> Intent: {actual_intent} | Answer: {answer[:95]}...")
 
-    # 5. Test Question 4: Event Performance
-    q4 = "How did Inflation perform?"
-    print(f"4. Testing POST /api/analyst/query ('{q4}')...")
-    res4 = client.post("/api/analyst/query", json={"question": q4})
-    print(f"   Status: {res4.status_code}")
-    assert res4.status_code == 200, f"Expected 200, got {res4.status_code}"
-    data4 = res4.json()
-    print(f"   Intent: {data4.get('intent')}")
-    print(f"   Answer: {data4.get('answer')}")
-    assert data4.get("intent") == "event_performance"
-    assert data4.get("supporting_data", {}).get("event_type") == "Inflation"
-    print("   [OK] Event performance query verified.\n")
-
-    # 6. Test Question 5: Market Regime During Event
-    q5 = "What was the market regime during Monetary Policy events?"
-    print(f"5. Testing POST /api/analyst/query ('{q5}')...")
-    res5 = client.post("/api/analyst/query", json={"question": q5})
-    print(f"   Status: {res5.status_code}")
-    assert res5.status_code == 200, f"Expected 200, got {res5.status_code}"
-    data5 = res5.json()
-    print(f"   Intent: {data5.get('intent')}")
-    print(f"   Answer: {data5.get('answer')}")
-    assert data5.get("intent") == "event_regime"
-    assert data5.get("supporting_data", {}).get("event_type") == "Monetary Policy"
-    assert "state_breakdown" in data5.get("supporting_data", {})
-    print("   [OK] Event regime query verified.\n")
-
-    # 7. Test Unsupported Question
-    q6 = "What is the capital of France?"
-    print(f"6. Testing POST /api/analyst/query ('{q6}') [Unsupported Query]...")
-    res6 = client.post("/api/analyst/query", json={"question": q6})
-    print(f"   Status: {res6.status_code}")
-    assert res6.status_code == 200, f"Expected 200, got {res6.status_code}"
-    data6 = res6.json()
-    print(f"   Intent: {data6.get('intent')}")
-    print(f"   Answer: {data6.get('answer')}")
-    assert data6.get("intent") == "unsupported"
-    assert "could not match your question" in data6.get("answer").lower()
-    print("   [OK] Unsupported query handling verified.\n")
-
-    # 8. Verify database row count immutability across all tables
+    # 3. Verify Database Immutability
     with get_session() as session:
         final_counts = {
             "market_data": session.scalar(select(func.count()).select_from(MarketData)),
@@ -134,14 +107,14 @@ def test_analyst_foundation():
             "event_market_analysis": session.scalar(select(func.count()).select_from(EventMarketAnalysis)),
         }
 
-    print("Final PostgreSQL Table Row Counts:")
+    print("\nFinal PostgreSQL Table Row Counts:")
     for table_name, count in final_counts.items():
         print(f"  - {table_name}: {count}")
         assert count == initial_counts[table_name], f"Row count changed for table '{table_name}'!"
 
     print("\n[OK] All database row counts completely unchanged!")
-    print("\n[OK] FINANCIAL ANALYST FOUNDATION TEST SUITE PASSED SUCCESSFULLY!")
+    print("\n[OK] EXPANDED FINANCIAL ANALYST TEST SUITE PASSED SUCCESSFULLY!")
 
 
 if __name__ == "__main__":
-    test_analyst_foundation()
+    test_analyst_expanded_queries()

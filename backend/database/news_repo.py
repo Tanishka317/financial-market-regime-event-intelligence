@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from backend.database.connection import get_engine
-from backend.database.models import News
+from backend.database.models import News, NewsAnalysis
 
 logger = logging.getLogger("news_repo")
 
@@ -31,6 +31,60 @@ def get_news_records(
         stmt = stmt.where(News.query_ticker == ticker.strip())
     stmt = stmt.order_by(News.published_at.desc()).limit(limit)
     return list(db.scalars(stmt).all())
+
+
+def get_news_with_analysis(
+    db: Session,
+    ticker: Optional[str] = None,
+    sentiment_label: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves raw news records joined with persisted news_analysis data.
+    Allows filtering by query_ticker, sentiment_label (positive/negative/neutral), or event_type.
+    """
+    stmt = select(
+        News.news_id,
+        News.published_at,
+        News.headline,
+        News.publisher,
+        News.query_ticker,
+        News.summary,
+        News.url,
+        NewsAnalysis.sentiment_label,
+        NewsAnalysis.sentiment_score,
+        NewsAnalysis.event_type,
+        NewsAnalysis.event_trigger,
+    ).outerjoin(NewsAnalysis, News.news_id == NewsAnalysis.news_id)
+
+    if ticker and ticker.strip():
+        stmt = stmt.where(News.query_ticker == ticker.strip())
+    if sentiment_label and sentiment_label.strip():
+        stmt = stmt.where(NewsAnalysis.sentiment_label == sentiment_label.strip().lower())
+    if event_type and event_type.strip():
+        stmt = stmt.where(NewsAnalysis.event_type == event_type.strip())
+
+    stmt = stmt.order_by(News.published_at.desc()).limit(limit)
+    results = db.execute(stmt).all()
+
+    output = []
+    for r in results:
+        output.append({
+            "news_id": r.news_id,
+            "published_at": r.published_at.isoformat() if r.published_at else None,
+            "headline": r.headline,
+            "publisher": r.publisher,
+            "query_ticker": r.query_ticker,
+            "summary": r.summary,
+            "url": r.url,
+            "sentiment_label": r.sentiment_label if r.sentiment_label else "neutral",
+            "sentiment_score": float(r.sentiment_score) if r.sentiment_score is not None else None,
+            "event_type": r.event_type if r.event_type else "Other",
+            "event_trigger": r.event_trigger,
+        })
+    return output
+
 
 
 
