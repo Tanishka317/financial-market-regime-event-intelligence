@@ -4,7 +4,7 @@ Financial Market Regime & Event Intelligence Engine
 """
 
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -14,6 +14,8 @@ from backend.database.regime_repo import get_latest_regime_prediction, get_regim
 from backend.database.news_repo import get_news_records
 from backend.database.news_analysis_repo import get_news_analysis_by_id
 from backend.database.event_market_repo import get_event_market_analysis_records
+from backend.analyst.service import execute_analyst_query
+
 
 app = FastAPI(
     title="Financial Market Regime & Event Intelligence Engine API",
@@ -240,3 +242,28 @@ def get_event_market_analysis(
             detail=f"No event-market analysis records found{filter_str}"
         )
     return records
+
+
+class AnalystQueryRequest(BaseModel):
+    question: str
+    ticker: Optional[str] = "^GSPC"
+
+
+class AnalystQueryResponse(BaseModel):
+    question: str
+    intent: str
+    answer: str
+    supporting_data: Dict[str, Any]
+
+
+@app.post("/api/analyst/query", response_model=AnalystQueryResponse, status_code=status.HTTP_200_OK)
+def query_financial_analyst(
+    request: AnalystQueryRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Data-grounded deterministic Financial Intelligence Analyst endpoint.
+    Answers natural language queries about market regimes, latest data, news, event performance, and regimes during events.
+    """
+    return execute_analyst_query(db=db, question=request.question, ticker=request.ticker)
+
