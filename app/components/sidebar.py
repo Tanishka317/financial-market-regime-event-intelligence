@@ -10,7 +10,7 @@ def get_pages() -> dict:
     Lazy-loads and returns the centralized Streamlit Page objects mapping.
     Prevents circular import issues between sidebar and page modules.
     """
-    from app.pages import overview, regimes, events, explainability, model_health
+    from app.pages import overview, regimes, events, explainability, model_health, ai_analyst
 
     return {
         "Overview": st.Page(overview.render, title="Overview", icon="📊", default=True, url_path="overview"),
@@ -18,7 +18,9 @@ def get_pages() -> dict:
         "News & Events": st.Page(events.render, title="News & Events", icon="📰", url_path="events"),
         "Explainability": st.Page(explainability.render, title="Explainability", icon="🔍", url_path="explainability"),
         "Model & Data Health": st.Page(model_health.render, title="Model & Data Health", icon="⚙️", url_path="health"),
+        "AI Analyst": st.Page(ai_analyst.render, title="AI Analyst", icon="🤖", url_path="analyst"),
     }
+
 
 
 def navigate_to(page_name: str):
