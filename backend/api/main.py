@@ -15,6 +15,7 @@ from backend.database.news_repo import get_news_records
 from backend.database.news_analysis_repo import get_news_analysis_by_id
 from backend.database.event_market_repo import get_event_market_analysis_records
 from backend.analyst.service import execute_analyst_query
+from backend.llm.service import execute_hybrid_analyst_query
 
 
 app = FastAPI(
@@ -247,12 +248,16 @@ def get_event_market_analysis(
 class AnalystQueryRequest(BaseModel):
     question: str
     ticker: Optional[str] = "^GSPC"
+    use_llm: Optional[bool] = True
+    use_rag: Optional[bool] = True
 
 
 class AnalystQueryResponse(BaseModel):
     question: str
     intent: str
     answer: str
+    mode: Optional[str] = "deterministic"
+    sources: Optional[List[Dict[str, Any]]] = []
     supporting_data: Dict[str, Any]
 
 
@@ -262,8 +267,17 @@ def query_financial_analyst(
     db: Session = Depends(get_db)
 ):
     """
-    Data-grounded deterministic Financial Intelligence Analyst endpoint.
-    Answers natural language queries about market regimes, latest data, news, event performance, and regimes during events.
+    Data-grounded Financial Intelligence Analyst endpoint.
+    Orchestrates deterministic SQL analytical query, optional FAISS RAG context retrieval,
+    and optional OpenAI LLM synthesis.
     """
-    return execute_analyst_query(db=db, question=request.question, ticker=request.ticker)
+    use_llm = request.use_llm if request.use_llm is not None else True
+    use_rag = request.use_rag if request.use_rag is not None else True
+    return execute_hybrid_analyst_query(
+        db=db,
+        question=request.question,
+        ticker=request.ticker,
+        use_llm=use_llm,
+        use_rag=use_rag
+    )
 
