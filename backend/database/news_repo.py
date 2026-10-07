@@ -7,12 +7,31 @@ import logging
 import hashlib
 from datetime import datetime, timezone
 import pandas as pd
-from typing import Optional, Dict, Any
+from typing import Optional, List, Dict, Any
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from backend.database.connection import get_engine
 from backend.database.models import News
 
 logger = logging.getLogger("news_repo")
+
+
+def get_news_records(
+    db: Session,
+    ticker: Optional[str] = None,
+    limit: int = 100
+) -> List[News]:
+    """
+    Retrieves raw financial news records ordered by published_at descending.
+    Optionally filters by query_ticker if specified.
+    """
+    stmt = select(News)
+    if ticker is not None and ticker.strip():
+        stmt = stmt.where(News.query_ticker == ticker.strip())
+    stmt = stmt.order_by(News.published_at.desc()).limit(limit)
+    return list(db.scalars(stmt).all())
+
 
 
 def generate_news_id(row: Dict[str, Any]) -> str:

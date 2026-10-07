@@ -5,12 +5,43 @@ Financial Market Regime & Event Intelligence Engine
 
 import logging
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from backend.database.connection import get_engine
 from backend.database.models import RegimePrediction
 
 logger = logging.getLogger("regime_repo")
+
+
+def get_latest_regime_prediction(db: Session, ticker: str = "^GSPC") -> Optional[RegimePrediction]:
+    """
+    Retrieves the most recent Gaussian HMM regime prediction for the specified ticker,
+    ordered by date descending. Returns None if no record exists.
+    """
+    stmt = (
+        select(RegimePrediction)
+        .where(RegimePrediction.ticker == ticker)
+        .order_by(RegimePrediction.date.desc())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
+def get_regime_history(db: Session, ticker: str = "^GSPC", limit: int = 100) -> List[RegimePrediction]:
+    """
+    Retrieves historical Gaussian HMM regime predictions for the specified ticker,
+    ordered by date descending up to the specified limit.
+    """
+    stmt = (
+        select(RegimePrediction)
+        .where(RegimePrediction.ticker == ticker)
+        .order_by(RegimePrediction.date.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt).all())
+
 
 
 def persist_regime_predictions(

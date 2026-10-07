@@ -6,12 +6,44 @@ Financial Market Regime & Event Intelligence Engine
 import logging
 import pandas as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, List
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from backend.database.connection import get_engine
 from backend.database.models import MarketData
 
 logger = logging.getLogger("market_data_repo")
+
+
+def get_latest_market_data(db: Session, ticker: str = "^GSPC") -> Optional[MarketData]:
+    """
+    Retrieves the most recent available market_data record for the specified ticker,
+    ordered by date descending. Returns None if no record exists.
+    """
+    stmt = (
+        select(MarketData)
+        .where(MarketData.ticker == ticker)
+        .order_by(MarketData.date.desc())
+        .limit(1)
+    )
+    return db.scalar(stmt)
+
+
+def get_market_history(db: Session, ticker: str = "^GSPC", limit: int = 100) -> List[MarketData]:
+    """
+    Retrieves historical market_data records for the specified ticker,
+    ordered by date descending up to the specified limit.
+    """
+    stmt = (
+        select(MarketData)
+        .where(MarketData.ticker == ticker)
+        .order_by(MarketData.date.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt).all())
+
+
 
 
 def sanitize_val(val) -> Optional[float]:

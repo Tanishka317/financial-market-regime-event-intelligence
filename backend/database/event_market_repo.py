@@ -8,11 +8,69 @@ from datetime import datetime, timezone
 import pandas as pd
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 from backend.database.connection import get_engine, get_session
-from backend.database.models import News, EventMarketAnalysis
+from backend.database.models import News, NewsAnalysis, EventMarketAnalysis
 from backend.database.news_repo import generate_news_id
 
 logger = logging.getLogger("event_market_repo")
+
+
+def get_event_market_analysis_records(
+    db: Session,
+    event_type: Optional[str] = None,
+    hmm_state: Optional[int] = None,
+    limit: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves event-market analysis records joined with news and news_analysis data.
+    Allows optional filtering by event_type and hmm_state, ordered by event_date descending.
+    """
+    stmt = (
+        select(
+            EventMarketAnalysis.news_id,
+            EventMarketAnalysis.event_date,
+            EventMarketAnalysis.event_day_return,
+            EventMarketAnalysis.next_day_return,
+            EventMarketAnalysis.five_day_forward_return,
+            EventMarketAnalysis.volatility_20,
+            EventMarketAnalysis.hmm_state,
+            News.headline,
+            NewsAnalysis.event_type,
+            NewsAnalysis.sentiment_label,
+            NewsAnalysis.sentiment_score,
+        )
+        .join(News, EventMarketAnalysis.news_id == News.news_id)
+        .outerjoin(NewsAnalysis, EventMarketAnalysis.news_id == NewsAnalysis.news_id)
+    )
+
+    if event_type is not None and event_type.strip():
+        stmt = stmt.where(NewsAnalysis.event_type == event_type.strip())
+
+    if hmm_state is not None:
+        stmt = stmt.where(EventMarketAnalysis.hmm_state == hmm_state)
+
+    stmt = stmt.order_by(EventMarketAnalysis.event_date.desc()).limit(limit)
+
+    results = db.execute(stmt).all()
+
+    output = []
+    for row in results:
+        output.append({
+            "news_id": row.news_id,
+            "event_date": row.event_date,
+            "event_day_return": float(row.event_day_return) if row.event_day_return is not None else None,
+            "next_day_return": float(row.next_day_return) if row.next_day_return is not None else None,
+            "five_day_forward_return": float(row.five_day_forward_return) if row.five_day_forward_return is not None else None,
+            "volatility_20": float(row.volatility_20) if row.volatility_20 is not None else None,
+            "hmm_state": row.hmm_state,
+            "headline": row.headline,
+            "event_type": row.event_type if row.event_type else "Other",
+            "sentiment_label": row.sentiment_label if row.sentiment_label else "neutral",
+            "sentiment_score": float(row.sentiment_score) if row.sentiment_score is not None else None,
+        })
+    return output
+
 
 
 def sanitize_float(val) -> Optional[float]:

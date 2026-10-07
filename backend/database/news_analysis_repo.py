@@ -7,12 +7,24 @@ import logging
 from datetime import datetime, timezone
 import pandas as pd
 from typing import Optional
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from sqlalchemy.dialects.postgresql import insert
 from backend.database.connection import get_engine
 from backend.database.models import NewsAnalysis
 from backend.database.news_repo import generate_news_id, persist_news
 
 logger = logging.getLogger("news_analysis_repo")
+
+
+def get_news_analysis_by_id(db: Session, news_id: str) -> Optional[NewsAnalysis]:
+    """
+    Retrieves the persisted news_analysis record for the specified news_id.
+    Returns None if no analysis record exists.
+    """
+    stmt = select(NewsAnalysis).where(NewsAnalysis.news_id == news_id)
+    return db.scalar(stmt)
+
 
 
 def sanitize_score(val) -> float:

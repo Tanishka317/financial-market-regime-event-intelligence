@@ -58,3 +58,15 @@ def get_session() -> Session:
         engine = get_engine()
         _SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     return _SessionLocal()
+
+
+def get_db():
+    """
+    FastAPI dependency generator yielding a database session and ensuring proper release/closing.
+    """
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
+
